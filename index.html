@@ -130,7 +130,30 @@ footer{margin-top:22px;font-size:11.5px;color:var(--muted);text-align:center;lin
 .errbox h4{margin:0 0 6px;font-size:14px}
 .errbox ol{margin:8px 0 0 18px;padding:0;line-height:1.9}
 .errbox a{color:inherit}
-@media(max-width:900px){.layout{grid-template-columns:1fr}.side{position:static;max-height:none}.cell{min-height:78px}}
+/* modal popup */
+.modal{display:none;position:fixed;inset:0;z-index:1000;align-items:flex-end;justify-content:center}
+.modal.show{display:flex}
+.modal-back{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.modal-card{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;max-width:560px;max-height:86vh;overflow:auto;padding:18px 16px 28px;box-shadow:0 -8px 40px rgba(0,0,0,.3);animation:slideUp .22s ease}
+@keyframes slideUp{from{transform:translateY(34px);opacity:.5}to{transform:translateY(0);opacity:1}}
+.modal-x{position:absolute;top:12px;right:12px;border:1px solid var(--line);background:var(--bg);color:var(--muted);width:32px;height:32px;border-radius:50%;font-size:15px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center;z-index:2}
+.modal-card h3{margin:0 34px 3px 0}
+@media(min-width:901px){.modal{align-items:center}.modal-card{border-radius:18px;max-height:80vh}}
+@media(max-width:900px){
+ .layout{grid-template-columns:1fr}
+ .side{display:none}
+ .cal{padding:10px}
+ .grid{gap:5px}
+ .calhead{gap:5px}
+ .calhead div{font-size:12.5px}
+ .cell{min-height:76px;padding:5px 4px;border-radius:9px;gap:4px}
+ .cell .dn{font-size:15px}
+ .cell .dn .wd{display:none}
+ .cell .cnt{font-size:9.5px}
+ .it{font-size:10px;padding:2px 4px}
+ .more{font-size:9.5px}
+ .kpis{grid-template-columns:repeat(2,1fr)}
+}
 </style>
 </head>
 <body>
@@ -172,6 +195,13 @@ footer{margin-top:22px;font-size:11.5px;color:var(--muted);text-align:center;lin
   ข้อมูลเชื่อมกับ Google Sheet แบบสด · กด <b>Refresh</b> เพื่อดึงข้อมูลล่าสุด<br>
   <span id="foot"></span>
 </footer>
+</div>
+<div class="modal" id="modal">
+  <div class="modal-back" id="modalBack"></div>
+  <div class="modal-card">
+    <button class="modal-x" id="modalX" aria-label="ปิด">✕</button>
+    <div id="modalBody"></div>
+  </div>
 </div>
 <script>
 const SHEET_ID="1Fd6v5jITYNjCM62B13_TMxmRpb9rWBfpJ3fLWOs8spU";
@@ -421,7 +451,7 @@ function renderGrid(){
   if(vis.length>3)its+=`<div class="more">+${vis.length-3} เพิ่มเติม</div>`;
   c.innerHTML=`<div class="dn"><span>${d}</span><span class="wd">${wd}</span></div>`+
    (vis.length?`<div class="cnt">${vis.length} งาน</div><div class="items">${its}</div>`:"");
-  c.onclick=()=>{selDate=ds;renderGrid();renderSide();};
+  c.onclick=()=>{selDate=ds;renderGrid();renderSide();if(window.matchMedia("(max-width:900px)").matches)openDayModal();};
   grid.appendChild(c);
  }
  renderLegend();
@@ -431,15 +461,7 @@ function renderLegend(){
  el.innerHTML=Object.entries(PILLAR).map(([k,v])=>`<span><span class="pdot" style="background:${v.c}"></span>${v.lb}</span>`).join("")
   +' &nbsp;|&nbsp; '+Object.entries(PLAT).map(([k,v])=>`<span><span class="pdot" style="border-radius:50%;background:${v.c}"></span>${k}</span>`).join("");
 }
-function renderSide(){
- const el=document.getElementById("side");
- if(!selDate){
-  const items=monthItems().filter(pass);
-  el.innerHTML=`<h3>ภาพรวมเดือน${MONTHS.find(m=>m.key==curMonth).th}</h3>
-   <div class="sub">คลิกที่วันในปฏิทินเพื่อดูรายละเอียดงาน</div>
-   <div class="empty-note">📅 เลือกวันที่ต้องการ<br>เพื่อดูดีเทลคอนเทนต์ทั้งหมด<br><br>ตอนนี้แสดง ${items.length} งานในเดือนนี้</div>`;
-  return;
- }
+function detailHTML(){
  const all=(DATA[curMonth]||[]).filter(it=>it.date==selDate);
  const vis=all.filter(pass);
  const dt=pd(selDate);
@@ -458,8 +480,32 @@ function renderSide(){
      <span>Pillar: <b style="color:${p.c}">${p.lb}</b></span>
      ${it.event?`<span>Event/Theme: <b>${it.event}</b></span>`:""}
    </div></div>`;}).join(""):`<div class="empty-note">ไม่มีงานที่ตรงกับตัวกรองในวันนี้</div>`;
- el.innerHTML=`<h3>${nice}</h3><div class="sub">${vis.length} งาน${all.length!=vis.length?` (จากทั้งหมด ${all.length})`:""}</div><div class="detail">${body}</div>`;
+ return `<h3>${nice}</h3><div class="sub">${vis.length} งาน${all.length!=vis.length?` (จากทั้งหมด ${all.length})`:""}</div><div class="detail">${body}</div>`;
 }
+function renderSide(){
+ const el=document.getElementById("side");
+ if(!selDate){
+  const items=monthItems().filter(pass);
+  el.innerHTML=`<h3>ภาพรวมเดือน${MONTHS.find(m=>m.key==curMonth).th}</h3>
+   <div class="sub">คลิกที่วันในปฏิทินเพื่อดูรายละเอียดงาน</div>
+   <div class="empty-note">📅 เลือกวันที่ต้องการ<br>เพื่อดูดีเทลคอนเทนต์ทั้งหมด<br><br>ตอนนี้แสดง ${items.length} งานในเดือนนี้</div>`;
+  return;
+ }
+ el.innerHTML=detailHTML();
+}
+function openDayModal(){
+ if(!selDate)return;
+ document.getElementById("modalBody").innerHTML=detailHTML();
+ document.getElementById("modal").classList.add("show");
+ document.body.style.overflow="hidden";
+}
+function closeDayModal(){
+ document.getElementById("modal").classList.remove("show");
+ document.body.style.overflow="";
+}
+document.getElementById("modalBack").onclick=closeDayModal;
+document.getElementById("modalX").onclick=closeDayModal;
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeDayModal();});
 function renderAll(){
  if(!hasData()){document.getElementById("foot").textContent="";return;}
  renderMonths();renderFilters();renderStatusBar();renderKPIs();renderGrid();renderSide();
